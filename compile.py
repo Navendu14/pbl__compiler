@@ -5,29 +5,21 @@ import multiprocessing
 import hashlib
 import shutil
 
-# Create temporary directory for .ll and .bc files
 TEMP_DIR = "temp_files"
 os.makedirs(TEMP_DIR, exist_ok=True)
 
-# Create cache directory for object files
 CACHE_DIR = "obj_cache"
 os.makedirs(CACHE_DIR, exist_ok=True)
 
-# Step 1: Convert C to LLVM IR
-# Convert input.c to input.ll and store in temp_files
 input_ll = os.path.join(TEMP_DIR, "input.ll")
 subprocess.run(["clang", "-S", "-emit-llvm", "input.c", "-o", input_ll], check=True)
 print("Step 1: input.c converted to", input_ll)
 
-# Step 2: Extract Function Names
-# Read input.ll and find all function definitions
 with open(input_ll, "r") as f:
     content = f.read()
 func_names = re.findall(r"define\s+.*?\s+@(\w+)\(", content)
 print("Step 2: Functions found:", func_names)
 
-# Step 3: Extract Global Variables
-# Extract lines before the first 'define' for globals.ll
 with open(input_ll, "r") as f:
     lines = f.readlines()
 for i, line in enumerate(lines):
@@ -42,40 +34,26 @@ with open(globals_ll, "w") as f:
     f.writelines(globals_lines)
 print("Step 3a: Extracted and modified", globals_ll, "with linkonce_odr linkage")
 
-# Compile globals.ll to globals.o
 globals_o = os.path.join(TEMP_DIR, "globals.o")
 subprocess.run(["clang", "-c", globals_ll, "-o", globals_o], check=True)
 print("Step 3b: Compiled", globals_ll, "to", globals_o)
 
-# Step 4: Split into Separate .ll Files
-# If there's more than one function, split; otherwise, use input.ll
 ll_files = []
 if len(func_names) > 1:
     for func in func_names:
         bc_file = os.path.join(TEMP_DIR, f"{func}.bc")
         ll_file = os.path.join(TEMP_DIR, f"{func}.ll")
         
-        # Extract the function into a .bc file
         subprocess.run(["llvm-extract", "-func", func, input_ll, "-o", bc_file], check=True)
-        
-        # Convert .bc to .ll
+
         subprocess.run(["llvm-dis", bc_file, "-o", ll_file], check=True)
         
         ll_files.append(ll_file)
 else:
-    # If only one function, use the original input.ll
     ll_files = [input_ll]
 print("Step 4: Split input.ll into separate .ll files:", ll_files)
 
-# Step 5: Compile to Object Files with Content-Based Caching and Parallelization
 def normalize_ll_code(code: str) -> str:
-    """
-    Normalize LLVM IR code:
-    - Remove comments, ModuleID, source_filename, and datalayout
-    - Remove extra whitespace and blank lines
-    - Sort declare statements
-    - Preserve define order
-    """
     code = re.sub(r"^\s*;.*", "", code, flags=re.MULTILINE)
     code = re.sub(r'^\s*source_filename\s*=.*', '', code, flags=re.MULTILINE)
     code = re.sub(r'^\s*target datalayout\s*=.*', '', code, flags=re.MULTILINE)
@@ -107,41 +85,31 @@ def compute_file_hash(file_path):
     normalized_code = normalize_ll_code(code)
     return hashlib.sha256(normalized_code.encode('utf-8')).hexdigest()
 
-def compile_to_o(ll_file):
-    # Compute hash of the .ll file
+def compile_to_o(ll_file)
     file_hash = compute_file_hash(ll_file)
     cached_obj = os.path.join(CACHE_DIR, f"{file_hash}.o")
     
-    # Determine the output object file name
     base_name = os.path.splitext(os.path.basename(ll_file))[0]
     o_file = os.path.join(TEMP_DIR, f"{base_name}.o")
     
-    # Check if cached object exists
     if os.path.exists(cached_obj):
-        # Copy cached object to output location
         shutil.copyfile(cached_obj, o_file)
         print(f"Cache hit: {ll_file} → {o_file} (from {cached_obj})")
     else:
-        # Compile .ll file to .o file
         subprocess.run(["clang", "-c", ll_file, "-o", o_file], check=True)
         print(f"Compiled {ll_file} to {o_file}")
         
-        # Copy compiled object to cache directory
         shutil.copyfile(o_file, cached_obj)
         print(f"Cached {o_file} as {cached_obj}")
 
-# Compile in parallel
 with multiprocessing.Pool() as pool:
     pool.map(compile_to_o, ll_files)
 print("Step 5: Compiled all .ll files to .o files with caching")
 
-# Step 6: Link Object Files into Executable
-# Collect all object files, including globals.o
 o_files = [os.path.join(TEMP_DIR, f"{os.path.splitext(os.path.basename(ll_file))[0]}.o") for ll_file in ll_files] + [globals_o]
 subprocess.run(["clang"] + o_files + ["-o", "output"], check=True)
 print("Step 6: Linked all .o files into executable 'output'")
 
-# Step 7: Clean up temporary directory
 try:
     shutil.rmtree(TEMP_DIR)
     print("Step 7: Cleaned up temporary directory", TEMP_DIR)

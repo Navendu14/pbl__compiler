@@ -2,7 +2,7 @@ from transformers import AutoTokenizer, T5ForConditionalGeneration
 import torch
 import re
 
-model_path = 'codecompiler/model/codefix-model'  # your unzipped folder
+model_path = 'codecompiler/model/codefix-model' 
 
 tokenizer = AutoTokenizer.from_pretrained(model_path)
 model = T5ForConditionalGeneration.from_pretrained(model_path)
@@ -11,7 +11,7 @@ device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 model.to(device)
 
 def format_c_code(code):
-    # Temporarily protect `for (...)` statements
+ 
     for_statements = re.findall(r'for\s*\(.*?\)', code)
     protected = {}
 
@@ -20,16 +20,16 @@ def format_c_code(code):
         protected[key] = stmt
         code = code.replace(stmt, key)
 
-    # Add newlines after semicolons, braces
+  
     code = re.sub(r'\s*;\s*', ';\n', code)
     code = re.sub(r'\s*{\s*', ' {\n', code)
     code = re.sub(r'\s*}\s*', '\n}\n', code)
 
-    # Restore protected `for` statements
+   
     for key, stmt in protected.items():
         code = code.replace(key, stmt)
 
-    # Optional: Basic indentation
+  
     lines = code.splitlines()
     formatted_lines = []
     indent = 0

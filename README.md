@@ -11,7 +11,6 @@ This project is a web-based C programming environment built with Django that all
 - ⚙️ **Custom LLVM Compilation** with per-function partitioning and caching  
 - ⚡ **Parallel Compilation** using multiprocessing for faster builds  
 - 🖥️ **Live Output** of compiled code directly in the browser  
-- ✨ **Highlighted Corrections** to help visualize fixed syntax errors  
 
 ---
 
